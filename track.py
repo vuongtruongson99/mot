@@ -1,6 +1,7 @@
 import argparse
 import cv2
 import os
+from tqdm import tqdm
 # limit the number of cpus used by high performance libraries
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -45,7 +46,7 @@ from ultralytics.yolo.utils.plotting import Annotator, colors, save_one_box
 from tracker.get_trackers import create_tracker
 
 def run(opt):
-    source = opt.source                         # youtube, video,...
+    source = opt.seq                         # youtube, video,...
     yolo_weights = opt.yolo_weights              # yolov8l.pt
     reid_weights = opt.reid_weights             # osnet_x0_25_msmt17.pt
     tracking_method = opt.tracking_method       # bytetrack
@@ -123,9 +124,8 @@ def run(opt):
     curr_frames, prev_frames = [None] * bs, [None] * bs
 
 
-    for frame_idx, batch in enumerate(dataset):
+    for frame_idx, batch in tqdm(enumerate(dataset)):
         path, im, im0s, vid_cap, s = batch
-        print("Vid cap", vid_cap)
         visualize = increment_path(save_dir / Path(path[0]).stem, mkdir=True) if visualize else False
 
         with dt[0]:
@@ -157,10 +157,7 @@ def run(opt):
 
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
 
-            vid_path, vid_writer, txt_path = [None] * bs, [None] * bs, [None] * bs
-
             if det is not None and len(det):
-                print("Number of detection:",len(det))
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
                 # print results
@@ -186,6 +183,16 @@ def run(opt):
                         color = colors(id % 100, True)
                         annotator.box_label(bbox, label, color=color)
 
+                        if save_txt:
+                            # to MOT format
+                            bbox_left = output[0]
+                            bbox_top = output[1]
+                            bbox_w = output[2] - output[0]
+                            bbox_h = output[3] - output[1]
+                            # Write MOT compliant results to file
+                            with open(txt_path + '.txt', 'a') as f:
+                                f.write(('%g ' * 10 + '\n') % (frame_idx, id, int(bbox_left),  # MOT format
+                                                               int(bbox_top), int(bbox_w), int(bbox_h), -1, -1, -1, -1))
                 # print("After update: ", online_target)
                 # for t in online_target:
                 #     tlwh = t.tlwh
@@ -212,15 +219,7 @@ def run(opt):
                 #             (f'{id} {conf:.2f}' if hide_class else f'{id} {names[c]} {conf:.2f}'))
                 #         color = colors(c, True)
                 #         annotator.box_label(bbox, label, color=color)
-                
-            # Draw boxes from detection
-            # if len(det) > 0:
-            #     for j, box in enumerate(det):
-            #         bbox = box[:4]
-            #         c = int(box[5])
-            #         label = None if hide_labels else (f'{names[c]}')
-            #         color = colors(c, True)
-            #         annotator.box_label(bbox, label, color)
+
             
             im0s = annotator.result()
             if save_vid:
@@ -234,9 +233,6 @@ def run(opt):
             # cv2.imshow("Test", im0s)
             # if cv2.waitKey(1) == ord('q'):  # 1 millisecond
             #     exit()
-        # if frame_idx == 10:
-        #     break
-        # break
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -244,7 +240,7 @@ def parse_opt():
     parser.add_argument('--reid-weights', type=Path, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
     parser.add_argument('--tracking-method', type=str, default='bytetrack', help='strongsort, ocsort, bytetrack')
     parser.add_argument('--tracking-config', type=Path, default=None)
-    parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
+    parser.add_argument('--source', type=str, default='MOT20', help='file/dir/URL/glob, 0 for webcam')  
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.1, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
@@ -296,7 +292,12 @@ def parse_opt():
 
 def main(opt):
     check_requirements(requirements=ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
-    run(opt)
+
+    for seq in os.listdir(opt.source):
+        print("[INFO] Processing", seq)
+        img_path = os.path.join(opt.source, seq, 'img1')
+        opt.seq = img_path
+        run(opt)
 
 
 if __name__ == "__main__":
