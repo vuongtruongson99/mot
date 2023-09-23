@@ -125,6 +125,7 @@ def run(opt):
 
     for frame_idx, batch in enumerate(dataset):
         path, im, im0s, vid_cap, s = batch
+        print("Vid cap", vid_cap)
         visualize = increment_path(save_dir / Path(path[0]).stem, mkdir=True) if visualize else False
 
         with dt[0]:
@@ -156,6 +157,8 @@ def run(opt):
 
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
 
+            vid_path, vid_writer, txt_path = [None] * bs, [None] * bs, [None] * bs
+
             if det is not None and len(det):
                 print("Number of detection:",len(det))
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -168,7 +171,7 @@ def run(opt):
                 # pass detections to strongsort
                 with dt[3]:
                     outputs[i] = tracker_list[i].update(det.cpu(), im0)
-                    
+
                 if len(outputs[i]) > 0:
                     for j, (output) in enumerate(outputs[i]):
                         
@@ -220,10 +223,17 @@ def run(opt):
             #         annotator.box_label(bbox, label, color)
             
             im0s = annotator.result()
+            if save_vid:
+                save_path = str(Path(save_path))  # force *.mp4 suffix on results videos
+                os.makedirs(save_path, exist_ok=True)
+                img_name = path.split("/")[-1]
+                out_img_path = os.path.join(save_path, img_name)
+                cv2.imwrite(out_img_path, im0)
 
-            cv2.imshow("Test", im0)
-            if cv2.waitKey(1) == ord('q'):  # 1 millisecond
-                exit()
+
+            # cv2.imshow("Test", im0s)
+            # if cv2.waitKey(1) == ord('q'):  # 1 millisecond
+            #     exit()
         # if frame_idx == 10:
         #     break
         # break
@@ -231,7 +241,7 @@ def run(opt):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--yolo-weights', nargs='+', type=Path, default=WEIGHTS / 'yolov8x.pt', help='model.pt path(s)')
-    parser.add_argument('--reid-weights', type=Path, default=WEIGHTS / 'vit_base_patch16_224_TransReID.ckpt')
+    parser.add_argument('--reid-weights', type=Path, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
     parser.add_argument('--tracking-method', type=str, default='bytetrack', help='strongsort, ocsort, bytetrack')
     parser.add_argument('--tracking-config', type=Path, default=None)
     parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
