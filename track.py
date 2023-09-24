@@ -35,14 +35,15 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import logging
 from ultralytics.nn.autobackend import AutoBackend  # For inference on various platform
-from ultralytics.yolo.data.dataloaders.stream_loaders import LoadImages, LoadStreams
-from ultralytics.yolo.data.utils import IMG_FORMATS, VID_FORMATS
-from ultralytics.yolo.utils import DEFAULT_CFG, LOGGER, SETTINGS, callbacks, colorstr, ops
-from ultralytics.yolo.utils.checks import check_file, check_imgsz, check_imshow, print_args, check_requirements
-from ultralytics.yolo.utils.files import increment_path
-from ultralytics.yolo.utils.torch_utils import select_device
-from ultralytics.yolo.utils.ops import Profile, non_max_suppression, scale_boxes, process_mask, process_mask_native
-from ultralytics.yolo.utils.plotting import Annotator, colors, save_one_box
+from ultralytics.data.augment import LetterBox
+from ultralytics.data.loaders import LoadImages, LoadStreams
+from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
+from ultralytics.utils import DEFAULT_CFG, LOGGER, SETTINGS, callbacks, colorstr, ops
+from ultralytics.utils.checks import check_file, check_imgsz, check_imshow, print_args, check_requirements
+from ultralytics.utils.files import increment_path
+from ultralytics.utils.torch_utils import select_device
+from ultralytics.utils.ops import Profile, non_max_suppression, scale_boxes, process_mask, process_mask_native
+from ultralytics.utils.plotting import Annotator, colors, save_one_box
 from tracker.get_trackers import create_tracker
 
 def run(opt):
@@ -101,7 +102,7 @@ def run(opt):
 
     # Dataloader
     bs = 1
-    dataset = LoadImages(source, imgsz=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+    dataset = LoadImages(source, imgsz=imgsz, vid_stride=vid_stride)
     # print(dataset)
 
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
@@ -125,7 +126,13 @@ def run(opt):
 
 
     for frame_idx, batch in tqdm(enumerate(dataset)):
-        path, im, im0s, vid_cap, s = batch
+        path, im0s, vid_cap, s = batch
+        path = path[0]
+        im0s= im0s[0]
+        im = LetterBox(imgsz, True, stride=stride)(image=im0s)
+        im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        im = np.ascontiguousarray(im)  # contiguous
+
         visualize = increment_path(save_dir / Path(path[0]).stem, mkdir=True) if visualize else False
 
         with dt[0]:
