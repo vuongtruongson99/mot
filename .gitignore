@@ -2,4 +2,5 @@ data/
 weights/
 runs/
 result/
-eval/
+eval/TrackEval/data
+eval/data.zip
